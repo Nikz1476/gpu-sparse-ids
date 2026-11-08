@@ -73,21 +73,17 @@ nb = {
                 "import os\n",
                 "\n",
                 "REPO_DIR = \"/content/gpu_sparse_ids\"\n",
-                "# If the repo was already cloned or uploaded, use it; otherwise clone:\n",
+                "REPO_URL = \"https://github.com/Nikz1476/gpu-sparse-ids.git\"\n",
+                "\n",
                 "if not os.path.exists(REPO_DIR):\n",
-                "    # Replace with your repository URL if running standalone:\n",
-                "    REPO_URL = \"https://github.com/Nikz1476/gpu-sparse-ids.git\"\n",
-                "    print(f\"Target repository directory: {REPO_DIR}\")\n",
-                "    if not os.path.exists(\"CMakeLists.txt\"):\n",
-                "        print(f\"Cloning {REPO_URL}...\")\n",
-                "        !git clone {REPO_URL} {REPO_DIR} || mkdir -p {REPO_DIR}\n",
-                "    else:\n",
-                "        REPO_DIR = os.getcwd()\n",
+                "    print(f\"Cloning {REPO_URL} into {REPO_DIR}...\")\n",
+                "    !git clone {REPO_URL} {REPO_DIR}\n",
                 "else:\n",
-                "    print(f\"Using existing directory: {REPO_DIR}\")\n",
+                "    print(f\"Updating existing repository at {REPO_DIR}...\")\n",
+                "    !cd {REPO_DIR} && git fetch origin && git reset --hard origin/main\n",
                 "\n",
                 "%cd {REPO_DIR}\n",
-                "!ls -la"
+                "!git log -n 3 --oneline\n"
             ]
         },
         {
