@@ -1,0 +1,152 @@
+{
+  "summary": {
+    "mode": "Sequential",
+    "num_threads": 1,
+    "num_packets": 15,
+    "num_signatures": 8,
+    "ngram_size": 3,
+    "vocab_size": 65536,
+    "num_candidates": 13,
+    "num_alerts": 11,
+    "false_positive_candidates": 2,
+    "matrix_P": {"rows": 15, "cols": 65536, "nnz": 568, "sparsity_pct": 99.9422},
+    "matrix_S": {"rows": 8, "cols": 65536, "nnz": 82, "sparsity_pct": 99.9844},
+    "matrix_C": {"rows": 15, "cols": 8, "nnz": 20, "sparsity_pct": 83.3333},
+    "timing_ms": {"pcap_parse": 3.2639, "feature_extract": 1.3385, "csr_construct": 0.0050, "sparse_compute": 0.0152, "host_to_device": 0.0000, "device_to_host": 0.0000, "verification": 0.0101, "total": 1.4221},
+    "throughput_pkts_per_sec": 10548.07
+  },
+  "alerts": [
+    {
+      "packet_id": 0,
+      "signature_id": 1001,
+      "signature_name": "SQL_INJECTION_OR",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.1",
+      "src_port": 45678,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000000.000000,
+      "match_detail": "Exact match: SQL injection OR 1=1"
+    },
+    {
+      "packet_id": 1,
+      "signature_id": 1002,
+      "signature_name": "XSS_SCRIPT_ALERT",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.2",
+      "src_port": 45679,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000001.000000,
+      "match_detail": "Exact match: XSS script alert"
+    },
+    {
+      "packet_id": 2,
+      "signature_id": 1003,
+      "signature_name": "CMD_INJECTION_PASSWD",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.3",
+      "src_port": 45680,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000002.000000,
+      "match_detail": "Exact match: Command injection /etc/passwd"
+    },
+    {
+      "packet_id": 3,
+      "signature_id": 1004,
+      "signature_name": "DIR_TRAVERSAL_SHADOW",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.4",
+      "src_port": 45681,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000003.000000,
+      "match_detail": "Exact match: Directory traversal /etc/shadow"
+    },
+    {
+      "packet_id": 4,
+      "signature_id": 1005,
+      "signature_name": "NOP_SLED",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.5",
+      "src_port": 45682,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 8080,
+      "timestamp": 1000004.000000,
+      "match_detail": "Exact match: NOP sled indicator"
+    },
+    {
+      "packet_id": 5,
+      "signature_id": 1006,
+      "signature_name": "MALICIOUS_UA",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.6",
+      "src_port": 45683,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000005.000000,
+      "match_detail": "Exact match: Nikto scanner user agent"
+    },
+    {
+      "packet_id": 6,
+      "signature_id": 1007,
+      "signature_name": "DNS_TUNNEL",
+      "protocol": "UDP",
+      "src_ip": "10.0.0.7",
+      "src_port": 12345,
+      "dst_ip": "8.8.8.8",
+      "dst_port": 53,
+      "timestamp": 1000006.000000,
+      "match_detail": "Exact match: DNS tunneling indicator"
+    },
+    {
+      "packet_id": 7,
+      "signature_id": 1008,
+      "signature_name": "PHP_SHELL_EVAL",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.8",
+      "src_port": 45684,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000007.000000,
+      "match_detail": "Exact match: PHP eval base64 decode shell"
+    },
+    {
+      "packet_id": 11,
+      "signature_id": 1001,
+      "signature_name": "SQL_INJECTION_OR",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.13",
+      "src_port": 45693,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000011.000000,
+      "match_detail": "Exact match: SQL injection OR 1=1"
+    },
+    {
+      "packet_id": 11,
+      "signature_id": 1002,
+      "signature_name": "XSS_SCRIPT_ALERT",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.13",
+      "src_port": 45693,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000011.000000,
+      "match_detail": "Exact match: XSS script alert"
+    },
+    {
+      "packet_id": 14,
+      "signature_id": 1008,
+      "signature_name": "PHP_SHELL_EVAL",
+      "protocol": "TCP",
+      "src_ip": "10.0.0.16",
+      "src_port": 45695,
+      "dst_ip": "192.168.1.100",
+      "dst_port": 80,
+      "timestamp": 1000014.000000,
+      "match_detail": "Exact match: PHP eval base64 decode shell"
+    }
+  ]
+}

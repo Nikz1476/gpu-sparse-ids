@@ -55,11 +55,12 @@ struct Alert {
     uint32_t packet_id;
     uint32_t signature_id;
     std::string signature_name;
+    uint8_t protocol = 0;       // 6=TCP, 17=UDP
     std::string src_ip;
     std::string dst_ip;
-    uint16_t src_port;
-    uint16_t dst_port;
-    double timestamp;
+    uint16_t src_port = 0;
+    uint16_t dst_port = 0;
+    double timestamp = 0.0;
     std::string match_detail;
 };
 

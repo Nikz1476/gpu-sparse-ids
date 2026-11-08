@@ -16,19 +16,22 @@
 - CSR format for all sparse matrices
 - Three execution paths: Sequential CPU · OpenMP CPU · CUDA/cuSPARSE GPU
 - Short signature bypass: patterns < n-gram size skip sparse filter, go direct to verify
-- 22-test suite: unit tests + dense-reference SpMM validation + end-to-end ground truth
+- 23-test suite: unit tests + hardened PCAP rejection + dense-reference SpMM validation + end-to-end ground truth
+- Structured reporting: Terminal, CSV, and full JSON execution summaries
 
 ## Slide 4 — Results (40 sec)
 - 10,000 packets, 8 signatures, vocab 65,536
 - P: 10,000 × 65,536 — 98.83% sparse · S: 8 × 65,536 — 99.98% sparse
-- Sequential: 917 ms · OpenMP-4T: 328 ms (2.8×) · OpenMP-16T: 179 ms (5.1×)
-- Dominant bottleneck: **feature extraction** (90% of time) — not SpMM
+- Sequential: 943 ms (10,602 pkts/s) · OpenMP-4T: 323 ms (2.92×) · OpenMP-16T: 159 ms (5.93×, 62,877 pkts/s)
+- Dominant bottleneck: **feature extraction** (70-90% of time) — not SpMM
+- ThreadSanitizer verified: zero data races across multi-threaded extraction and SpMM
 
 ## Slide 5 — Roofline & GPU Outlook (20 sec)
-- SpMM arithmetic intensity: ~1.01 ops/byte → memory-bound
-- GPU SpMM alone won't achieve large end-to-end speedup
-- **Real GPU speedup requires** GPU-side n-gram hashing + cuSPARSE SpMM together
-- CUDA code ready; validation pending free GPU (Colab script provided)
+- SpMM arithmetic intensity: ~1.0127 ops/byte → memory-bandwidth bound
+- Best measured CPU SpMM throughput: 11.36 GOps/s (16 threads)
+- GPU cuSPARSE SpGEMM backend complete with RAII safety and sorted CSR guarantees
+- Interactive Colab notebook (`notebooks/gpu_sparse_ids_colab.ipynb`) for 1-click cloud GPU execution
+- Real GPU speedup requires GPU-side n-gram hashing + cuSPARSE SpMM together
 
 ## Slide 6 — Conclusion (10 sec)
 - Sparse n-gram IDS: correct, parallelisable, research-validated

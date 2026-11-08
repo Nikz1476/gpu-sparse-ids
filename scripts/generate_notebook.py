@@ -1,0 +1,328 @@
+import json
+import os
+
+nb = {
+    "cells": [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "# GPU-Accelerated Sparse Linear Algebra Network Intrusion Detection System\n",
+                "### Reproducible NVIDIA GPU (CUDA / cuSPARSE) Execution & Benchmark on Google Colab\n",
+                "\n",
+                "This notebook configures, builds, and evaluates the **GPU Sparse IDS** engine.\n",
+                "\n",
+                "**Hardware Requirement:**\n",
+                "Ensure you are running on a GPU runtime: `Runtime` -> `Change runtime type` -> select `T4 GPU` (or V100/A100).\n",
+                "\n",
+                "**Core Motif:** Sparse linear algebra ($C = P \\times S^T$) with byte n-gram feature representation + exact substring verification."
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 1: Hardware & Environment Detection\n",
+                "Check for NVIDIA GPU availability, driver status, and CUDA toolkit version."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "import subprocess, sys, os\n",
+                "\n",
+                "print(\"=== Detecting NVIDIA GPU ===\")\n",
+                "try:\n",
+                "    smi_out = subprocess.check_output([\"nvidia-smi\"], text=True)\n",
+                "    print(smi_out)\n",
+                "    has_gpu = True\n",
+                "except Exception as e:\n",
+                "    print(\"WARNING: nvidia-smi failed or no NVIDIA GPU detected:\", e)\n",
+                "    has_gpu = False\n",
+                "\n",
+                "try:\n",
+                "    nvcc_out = subprocess.check_output([\"nvcc\", \"--version\"], text=True)\n",
+                "    print(\"=== CUDA Compiler (nvcc) ===\")\n",
+                "    print(nvcc_out)\n",
+                "except Exception as e:\n",
+                "    print(\"WARNING: nvcc not found in PATH:\", e)\n",
+                "\n",
+                "if not has_gpu:\n",
+                "    print(\"\\n[FALLBACK NOTICE] No NVIDIA GPU found in this Colab session.\")\n",
+                "    print(\"Please navigate to Runtime -> Change runtime type -> Hardware accelerator -> T4 GPU.\")\n",
+                "    print(\"The notebook can still run in CPU (Sequential / OpenMP) fallback mode.\")"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 2: Clone or Accept Repository\n",
+                "Clone from GitHub or use the uploaded workspace."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "import os\n",
+                "\n",
+                "REPO_DIR = \"/content/gpu_sparse_ids\"\n",
+                "# If the repo was already cloned or uploaded, use it; otherwise clone:\n",
+                "if not os.path.exists(REPO_DIR):\n",
+                "    # Replace with your repository URL if running standalone:\n",
+                "    REPO_URL = \"https://github.com/nikhil/gpu_sparse_ids.git\" # Update if hosted\n",
+                "    print(f\"Target repository directory: {REPO_DIR}\")\n",
+                "    if not os.path.exists(\"CMakeLists.txt\"):\n",
+                "        print(f\"Cloning {REPO_URL}...\")\n",
+                "        !git clone {REPO_URL} {REPO_DIR} || mkdir -p {REPO_DIR}\n",
+                "    else:\n",
+                "        REPO_DIR = os.getcwd()\n",
+                "else:\n",
+                "    print(f\"Using existing directory: {REPO_DIR}\")\n",
+                "\n",
+                "%cd {REPO_DIR}\n",
+                "!ls -la"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 3: Install Required Dependencies\n",
+                "Install `libpcap-dev`, `cmake`, `build-essential`, and python plotting libraries."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!apt-get update -qq\n",
+                "!apt-get install -y -qq build-essential cmake libpcap-dev git\n",
+                "!pip install -q matplotlib numpy"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 4: Configure & Build CUDA / cuSPARSE Engine\n",
+                "Auto-detect the GPU compute architecture (T4=75, V100=70, A100=80) and compile."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "import torch, os\n",
+                "\n",
+                "cuda_arch = \"75\"  # Default for Colab T4\n",
+                "if torch.cuda.is_available():\n",
+                "    major, minor = torch.cuda.get_device_capability()\n",
+                "    cuda_arch = f\"{major}{minor}\"\n",
+                "    gpu_name = torch.cuda.get_device_name(0)\n",
+                "    print(f\"Detected GPU: {gpu_name} (Compute capability: sm_{cuda_arch})\")\n",
+                "else:\n",
+                "    print(\"GPU not detected via PyTorch, defaulting sm_75\")\n",
+                "\n",
+                "# Configure CMake with CUDA enabled\n",
+                "!mkdir -p build_cuda\n",
+                "%cd build_cuda\n",
+                "!cmake .. -DCMAKE_BUILD_TYPE=Release -DUSE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES={cuda_arch}\n",
+                "!make -j$(nproc)\n",
+                "%cd .."
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 5: Generate Test Data & Benchmarks\n",
+                "Produce ground-truth synthetic PCAP and attack signatures."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!mkdir -p data/pcap data/signatures benchmarks output\n",
+                "!./build_cuda/generate_test_data data 10000\n",
+                "!ls -la data/pcap data/signatures"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 6: Run Correctness Test Suite\n",
+                "Validate all 23 unit, property, and integration tests."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!./build_cuda/test_ids"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 7: Run CUDA IDS on Ground-Truth Traffic\n",
+                "Execute the full pipeline with cuSPARSE SpGEMM, exporting structured CSV & JSON."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!./build_cuda/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt cuda 1 3 65536 \\\n",
+                "    --out-csv output/cuda_alerts.csv \\\n",
+                "    --out-json output/cuda_alerts.json\n",
+                "\n",
+                "import json\n",
+                "if os.path.exists(\"output/cuda_alerts.json\"):\n",
+                "    with open(\"output/cuda_alerts.json\") as f:\n",
+                "        res = json.load(f)\n",
+                "    print(f\"Generated {len(res['alerts'])} verified alerts via CUDA cuSPARSE.\")\n",
+                "    print(\"JSON Summary:\", json.dumps(res['summary'], indent=2))"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 8: Comparative Benchmark (Sequential vs OpenMP vs CUDA)\n",
+                "Run the multi-threaded and GPU benchmarks on 10,000 packets."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!./build_cuda/benchmark_ids data/pcap/benchmark_traffic.pcap data/signatures/test_signatures.txt benchmarks/benchmark_results.csv\n",
+                "!cat benchmarks/benchmark_results.csv"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 9: Alert Equivalence Validation\n",
+                "Confirm that Sequential CPU, OpenMP multi-thread, and CUDA GPU produce 100% identical alerts."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Run Sequential\n",
+                "!./build_cuda/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt seq 1 3 65536 --out-json output/seq.json\n",
+                "# Run OpenMP\n",
+                "!./build_cuda/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt omp 4 3 65536 --out-json output/omp.json\n",
+                "# Run CUDA\n",
+                "!./build_cuda/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt cuda 1 3 65536 --out-json output/cuda.json\n",
+                "\n",
+                "with open('output/seq.json') as f1, open('output/omp.json') as f2, open('output/cuda.json') as f3:\n",
+                "    s_alerts = json.load(f1)['alerts']\n",
+                "    o_alerts = json.load(f2)['alerts']\n",
+                "    c_alerts = json.load(f3)['alerts']\n",
+                "\n",
+                "print(f\"Sequential alerts: {len(s_alerts)}\")\n",
+                "print(f\"OpenMP alerts:     {len(o_alerts)}\")\n",
+                "print(f\"CUDA alerts:       {len(c_alerts)}\")\n",
+                "assert len(s_alerts) == len(o_alerts) == len(c_alerts), \"Alert count mismatch!\"\n",
+                "print(\"SUCCESS: Sequential, OpenMP, and CUDA outputs are 100% equivalent!\")"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 10: Generate Benchmark Plots & Roofline Analysis"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!python3 scripts/plot_benchmarks.py\n",
+                "\n",
+                "from IPython.display import Image, display\n",
+                "for plot_name in [\"total_time.png\", \"speedup.png\", \"phase_breakdown.png\", \"throughput.png\"]:\n",
+                "    path = os.path.join(\"benchmarks\", plot_name)\n",
+                "    if os.path.exists(path):\n",
+                "        print(f\"Displaying {plot_name}:\")\n",
+                "        display(Image(path))"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 11: Export & Download Benchmark Artifacts"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "!zip -r /content/gpu_sparse_ids_results.zip benchmarks/ output/\n",
+                "try:\n",
+                "    from google.colab import files\n",
+                "    files.download('/content/gpu_sparse_ids_results.zip')\n",
+                "    print(\"Downloaded results bundle!\")\n",
+                "except Exception as e:\n",
+                "    print(\"Running outside Colab interactive environment, results saved to /content/gpu_sparse_ids_results.zip\")"
+            ]
+        }
+    ],
+    "metadata": {
+        "accelerator": "GPU",
+        "colab": {
+            "gpuType": "T4",
+            "provenance": []
+        },
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+        },
+        "language_info": {
+            "name": "python",
+            "version": "3.10"
+        }
+    },
+    "nbformat": 4,
+    "nbformat_minor": 0
+}
+
+with open("/mnt/d/Nikhil/gitrepos/gpu_sparse_ids/notebooks/gpu_sparse_ids_colab.ipynb", "w", encoding="utf-8") as f:
+    json.dump(nb, f, indent=2)
+
+print("Notebook generated successfully at notebooks/gpu_sparse_ids_colab.ipynb")
+

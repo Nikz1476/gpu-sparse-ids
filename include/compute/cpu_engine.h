@@ -1,17 +1,23 @@
 #pragma once
 #include "common/types.h"
 #include "features/ngram_features.h"
+#include "sparse/csr_matrix.h"
 #include <vector>
 
 namespace ids {
 
 class CPUEngine {
 public:
+    // Run the full sequential detection pipeline.
+    // Optionally returns CSR matrices P, S, C for analysis/reporting.
     static std::vector<Alert> run_sequential(
         const std::vector<Packet>& packets,
         const std::vector<Signature>& signatures,
         const NGramFeatureExtractor& extractor,
-        TimingResult& timing);
+        TimingResult& timing,
+        CSRMatrix* out_P = nullptr,
+        CSRMatrix* out_S = nullptr,
+        CSRMatrix* out_C = nullptr);
 
     static std::vector<std::vector<int>> extract_all_features(
         const std::vector<Packet>& packets,

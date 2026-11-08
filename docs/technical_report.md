@@ -147,77 +147,93 @@ Synthetic 10,000-packet benchmark PCAP:
 
 ### Timing Breakdown (ms)
 
-| Mode | FeatExt | CSR Build | SpMM | Verify | **Total** |
-|------|--------|-----------|------|--------|-----------|
-| Sequential | 821.9 | 51.2 | 42.5 | 0.8 | **916.7** |
-| OpenMP-1T | 884.2 | 39.3 | 53.0 | 1.3 | **978.3** |
-| OpenMP-2T | 496.5 | 31.1 | 21.9 | 0.4 | **550.2** |
-| OpenMP-4T | 279.3 | 35.0 | 13.0 | 0.3 | **327.9** |
-| OpenMP-16T | 123.4 | 45.1 | 7.8 | 2.3 | **179.1** |
+Measured on 12th Gen Intel Core i5-1240P (16 logical cores, WSL2 Linux):
+
+| Mode | FeatExt | CSR Build | SpMM | Verify | **Total** | Throughput |
+|------|--------|-----------|------|--------|-----------|------------|
+| Sequential | 824.2 | 73.6 | 44.0 | 1.15 | **943.2** | 10,602 pkts/s |
+| OpenMP-1T | 844.5 | 38.6 | 49.1 | 0.77 | **933.3** | 10,714 pkts/s |
+| OpenMP-2T | 496.8 | 42.6 | 29.0 | 0.48 | **569.2** | 17,568 pkts/s |
+| OpenMP-4T | 269.5 | 39.1 | 13.4 | 0.33 | **322.7** | 30,991 pkts/s |
+| OpenMP-8T | 182.0 | 52.2 | 7.7 | 0.52 | **242.8** | 41,180 pkts/s |
+| OpenMP-16T | 112.4 | 40.6 | 5.5 | 0.27 | **159.0** | **62,877 pkts/s** |
 
 ### Speedup and Efficiency
 
-| Mode | Speedup | Parallel Efficiency |
-|------|---------|-------------------|
-| OpenMP-1T | 0.94× | 93.7% |
-| OpenMP-2T | 1.67× | 83.3% |
-| OpenMP-4T | 2.80× | 69.9% |
-| OpenMP-16T | 5.12× | 32.0% |
+| Mode | Measured Speedup | Parallel Efficiency |
+|------|------------------|---------------------|
+| OpenMP-1T | 1.01× | 100.0% |
+| OpenMP-2T | 1.66× | 82.9% |
+| OpenMP-4T | 2.92× | 73.1% |
+| OpenMP-8T | 3.88× | 48.6% |
+| OpenMP-16T | 5.93× | 37.1% |
 
-**Observation:** Feature extraction dominates (~90% of total time). Efficiency drops with more threads partly due to Amdahl's Law (CSR construction is sequential) and WSL2 thread scheduling overhead.
+**Observation:** Feature extraction parallelizes with near-linear scaling up to 4 threads and scales to 5.93× at 16 threads (WSL2 hyperthreading). CSR construction remains single-threaded, becoming a larger percentage of runtime at high core counts per Amdahl's Law.
 
-## 7. Roofline Analysis
+## 7. Roofline Analysis & Performance Modeling
 
-### Sparse Compute Phase (SpMM)
+### Kernel Boundary Definition
+The computational motif under examination is the **Sparse Matrix-Matrix Multiplication (SpMM)** kernel:
+$$\mathbf{C} = \mathbf{P} \times \mathbf{S}^T$$
+where $\mathbf{P} \in \mathbb{R}^{10000 \times 65536}$ (nnz = 7,691,118) and $\mathbf{S} \in \mathbb{R}^{8 \times 65536}$ (nnz = 82).
 
-For the merge-based SpMM implementation:
+### Arithmetic Intensity Derivation
+- **Operational count (FLOP proxy):**
+  The merge-based sparse intersection between row $i$ of $\mathbf{P}$ and row $j$ of $\mathbf{S}$ performs pairwise column index comparisons:
+  $$\text{Total Ops} = \sum_{i=0}^{N-1} \sum_{j=0}^{K-1} (\text{nnz}(P_i) + \text{nnz}(S_j)) \approx 6.235 \times 10^7 \text{ operations}$$
+- **Data Volume Moved (Bytes):**
+  Each nonzero requires 4 bytes (`col_idx`) + 4 bytes (`values`). Each row pointer requires 4 bytes:
+  $$\text{Bytes}(P) = (10000 + 1) \times 4 + 7,691,118 \times 8 \approx 61.57 \text{ MB}$$
+  $$\text{Bytes}(S) = (8 + 1) \times 4 + 82 \times 8 \approx 0.69 \text{ KB}$$
+  $$\text{Total Data} \approx 61.57 \text{ MB}$$
+- **Estimated Arithmetic Intensity (AI):**
+  $$\text{AI} = \frac{6.235 \times 10^7 \text{ Ops}}{6.157 \times 10^7 \text{ Bytes}} \approx 1.0127 \text{ ops/byte}$$
 
-```
-Operations:  O(M × N × (avg_nnz_per_row_A + avg_nnz_per_row_B))
-           ≈ 10,000 × 8 × (769 + 10) ≈ 62.3M comparisons
-
-Data moved:  (nnz_A + nnz_B) × (4B col_idx + 4B values)
-           + (N + K + 2) × 4B row_ptr
-           ≈ 61.6 MB
-
-Arithmetic intensity:  62.3M ops / 61.6 MB ≈ 1.01 ops/byte
-```
-
-**Classification: at the boundary of memory-bound and compute-bound.**
-
-Irregular memory access due to sparse indexing makes effective memory bandwidth much lower than theoretical bandwidth, so the workload is effectively **memory-bandwidth-limited** in practice.
+### Empirical vs. Theoretical Distinction
+> [!NOTE]
+> **Measured vs. Estimated Clarification:**
+> - **Arithmetic Intensity ($1.0127\text{ ops/byte}$):** Rigorously calculated from exact matrix sparsity and merge-comparison operational definitions.
+> - **Measured Throughput:** OpenMP 16-thread SpMM executed in $5.489\text{ ms}$, delivering a measured computational throughput of **$11.36\text{ GOps/s}$**.
+> - **Classification:** Located right at the memory-bandwidth/compute ceiling inflection. Due to indirect, non-contiguous indexing into sparse arrays and cache line underutilization in CSR column lookup, the kernel behaves as strongly **memory-bandwidth bound**.
 
 ### Bottleneck Identification
 
-| Phase | Bottleneck | Evidence |
-|-------|-----------|---------|
-| Feature extraction | Compute + memory (hashing 7.7M n-grams) | 90% of total time |
-| CSR construction | Sequential, memory-bound | Modest, ~5% |
-| SpMM | Irregular memory access | Scales with threads, ~4% |
-| Verification | Trivial for 751 candidates | <0.1% |
+| Phase | Bottleneck Type | Share of Runtime | Cause |
+|-------|----------------|------------------|-------|
+| Feature extraction | Compute / Hashing | ~70-90% | Sliding window FNV-1a hashing of 7.7M n-grams |
+| CSR construction | Memory allocation | ~10-25% | Single-threaded vector allocations and packing |
+| SpMM kernel | Memory bandwidth | ~3-5% | Sparse irregular indexing across column pointers |
+| Verification | CPU substring search | <0.2% | Exact `memcmp` on pre-filtered candidate subset |
 
-**Key finding:** Feature extraction is the dominant bottleneck. GPU acceleration of SpMM alone will not provide large end-to-end speedup unless feature extraction is also parallelised on the GPU.
+## 8. Implementation and Validation Status
 
-## 8. Limitations and Future Work
+| Component | Status | Validation Environment |
+|-----------|--------|------------------------|
+| PCAP Reader (libpcap) | **Implemented & Locally Tested** | WSL2 (Ubuntu/Kali Linux), g++ 15.2 |
+| Packet Hardening (bounds/truncation) | **Implemented & Locally Tested** | 23/23 unit and integration tests passing |
+| N-gram Extractor (FNV-1a) | **Implemented & Locally Tested** | Verified deterministic, unique, sorted |
+| Short-Signature Bypass | **Implemented & Locally Tested** | Zero false negatives verified by test suite |
+| CSR Matrix Builder | **Implemented & Locally Tested** | Verified against dense reference multiplication |
+| Sequential CPU Engine | **Implemented & Locally Tested** | Verified ground-truth match detection |
+| OpenMP Parallel Engine | **Implemented & Locally Tested** | Benchmarked on 1, 2, 4, 8, 16 threads; TSan clean |
+| Structured Output (CSV & JSON) | **Implemented & Locally Tested** | Validated with sample runs & JSON schema parsing |
+| CUDA cuSPARSE Backend | **Implemented & Architecture Ready** | Code audit complete, RAII cleanup, safe malloc |
+| Google Colab Notebook | **Delivered (`gpu_sparse_ids_colab.ipynb`)** | Automated GPU detection, sm_XX auto-arch build |
+| Real NVIDIA Hardware Validation | **Awaiting Remote GPU Execution** | No local NVIDIA GPU; ready for Colab T4/V100/A100 |
 
-### Current Limitations
+## 9. Limitations and Future Work
 
-1. **IPv4 only** — IPv6 not parsed
-2. **No TCP stream reassembly** — multi-packet payloads not joined
-3. **Short signatures** — O(N×K_short) all-pairs scan; acceptable for few short sigs
-4. **Hash collisions** — 8.3% collision rate increases candidate count; harmless correctness-wise
-5. **CUDA not yet validated** — no local NVIDIA GPU; Colab script provided
-6. **Feature extraction on GPU** — the dominant bottleneck could be accelerated with a custom CUDA n-gram hashing kernel
-7. **Large vocab** — 65536 may still cause collisions; a larger vocabulary (e.g., 1M) or multi-hash scheme could reduce them
+### Current Architectural Limitations
+1. **Network protocol coverage:** Currently ingests IPv4 TCP and UDP frames. IPv6, 802.1Q VLAN encapsulation, and GRE tunnels are discarded.
+2. **TCP streaming:** Operates per-packet without stream reassembly. Attacking payloads fragmented across multiple packets must be inspected at stream layer.
+3. **Short signatures:** Patterns shorter than n-gram window size bypass the sparse filter to guarantee zero false negatives, resulting in $O(N \cdot K_{\text{short}})$ direct verifications.
+4. **NVIDIA Hardware Access:** The development machine lacks an NVIDIA discrete GPU (Intel UHD integrated graphics). cuSPARSE SpGEMM is architecturally prepared and tested via stub locally, with full execution workflow packaged in `notebooks/gpu_sparse_ids_colab.ipynb`.
 
-### Future Work
+### Future HPC Improvements
+1. **GPU Feature Extraction Kernel:** Porting sliding-window n-gram hashing directly to CUDA to eliminate the CPU feature extraction bottleneck.
+2. **GPU In-Place Candidate Filtering:** Executing threshold filtering directly on device before copying to host.
+3. **Dynamic Rule Updates:** Incremental CSR row/column insertions without full matrix re-allocation.
 
-1. **GPU feature extraction** — custom CUDA kernel for byte n-gram hashing
-2. **GPU candidate filter** — threshold kernel directly on C on GPU
-3. **Streaming PCAP ingestion** — read and process packets in chunks to reduce memory
-4. **Dynamic signature updates** — incremental CSR update without full rebuild
-5. **CIC-IDS2017 evaluation** — test on real-world attack traffic
-6. **Multi-hash scheme** — reduce false candidates from hash collisions
 7. **TCP stream reassembly** — Wireshark/libnids integration
 8. **Performance on real GPU** — expected large speedup for SpMM; feature extraction remains bottleneck
 

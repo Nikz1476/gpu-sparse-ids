@@ -133,6 +133,7 @@ std::vector<Alert> CPUEngine::verify_candidates(
             alert.packet_id = pkt.id;
             alert.signature_id = sig.id;
             alert.signature_name = sig.name;
+            alert.protocol = pkt.protocol;
             alert.src_ip = pkt.src_ip;
             alert.dst_ip = pkt.dst_ip;
             alert.src_port = pkt.src_port;
@@ -150,7 +151,10 @@ std::vector<Alert> CPUEngine::run_sequential(
     const std::vector<Packet>& packets,
     const std::vector<Signature>& signatures_in,
     const NGramFeatureExtractor& extractor,
-    TimingResult& timing)
+    TimingResult& timing,
+    CSRMatrix* out_P,
+    CSRMatrix* out_S,
+    CSRMatrix* out_C)
 {
     // Make a mutable copy for setting num_features
     std::vector<Signature> signatures = signatures_in;
@@ -200,6 +204,11 @@ std::vector<Alert> CPUEngine::run_sequential(
     timing.num_alerts = static_cast<int>(alerts.size());
 
     timing.total_ms = elapsed_ms(t0, t9);
+
+    // Optionally export matrix info
+    if (out_P) *out_P = P;
+    if (out_S) *out_S = S;
+    if (out_C) *out_C = C;
 
     return alerts;
 }

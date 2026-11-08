@@ -139,6 +139,7 @@ std::vector<Alert> OpenMPEngine::verify_candidates_parallel(
                 alert.packet_id = pkt.id;
                 alert.signature_id = sig.id;
                 alert.signature_name = sig.name;
+                alert.protocol = pkt.protocol;
                 alert.src_ip = pkt.src_ip;
                 alert.dst_ip = pkt.dst_ip;
                 alert.src_port = pkt.src_port;
@@ -163,7 +164,10 @@ std::vector<Alert> OpenMPEngine::run_parallel(
     std::vector<Signature>& signatures,
     const NGramFeatureExtractor& extractor,
     TimingResult& timing,
-    int num_threads)
+    int num_threads,
+    CSRMatrix* out_P,
+    CSRMatrix* out_S,
+    CSRMatrix* out_C)
 {
     if (num_threads <= 0) num_threads = omp_get_max_threads();
     omp_set_num_threads(num_threads);
@@ -212,6 +216,12 @@ std::vector<Alert> OpenMPEngine::run_parallel(
     timing.num_alerts = static_cast<int>(alerts.size());
 
     timing.total_ms = elapsed_ms(t0, t8);
+
+    // Optionally export matrix info
+    if (out_P) *out_P = P;
+    if (out_S) *out_S = S;
+    if (out_C) *out_C = C;
+
     return alerts;
 }
 

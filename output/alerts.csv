@@ -1,0 +1,12 @@
+packet_id,signature_id,signature_name,protocol,src_ip,src_port,dst_ip,dst_port,timestamp,match_detail
+0,1001,"SQL_INJECTION_OR",TCP,10.0.0.1,45678,192.168.1.100,80,1000000.000000,"Exact match: SQL injection OR 1=1"
+1,1002,"XSS_SCRIPT_ALERT",TCP,10.0.0.2,45679,192.168.1.100,80,1000001.000000,"Exact match: XSS script alert"
+2,1003,"CMD_INJECTION_PASSWD",TCP,10.0.0.3,45680,192.168.1.100,80,1000002.000000,"Exact match: Command injection /etc/passwd"
+3,1004,"DIR_TRAVERSAL_SHADOW",TCP,10.0.0.4,45681,192.168.1.100,80,1000003.000000,"Exact match: Directory traversal /etc/shadow"
+4,1005,"NOP_SLED",TCP,10.0.0.5,45682,192.168.1.100,8080,1000004.000000,"Exact match: NOP sled indicator"
+5,1006,"MALICIOUS_UA",TCP,10.0.0.6,45683,192.168.1.100,80,1000005.000000,"Exact match: Nikto scanner user agent"
+6,1007,"DNS_TUNNEL",UDP,10.0.0.7,12345,8.8.8.8,53,1000006.000000,"Exact match: DNS tunneling indicator"
+7,1008,"PHP_SHELL_EVAL",TCP,10.0.0.8,45684,192.168.1.100,80,1000007.000000,"Exact match: PHP eval base64 decode shell"
+11,1001,"SQL_INJECTION_OR",TCP,10.0.0.13,45693,192.168.1.100,80,1000011.000000,"Exact match: SQL injection OR 1=1"
+11,1002,"XSS_SCRIPT_ALERT",TCP,10.0.0.13,45693,192.168.1.100,80,1000011.000000,"Exact match: XSS script alert"
+14,1008,"PHP_SHELL_EVAL",TCP,10.0.0.16,45695,192.168.1.100,80,1000014.000000,"Exact match: PHP eval base64 decode shell"

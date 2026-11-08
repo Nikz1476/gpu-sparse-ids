@@ -124,10 +124,19 @@ This creates:
 ./build/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt omp 4
 ```
 
+### Structured Output (CSV & JSON)
+
+```bash
+# Export alerts to CSV and JSON alongside execution summary
+./build/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt omp 4 \
+    --out-csv output/alerts.csv \
+    --out-json output/alerts.json
+```
+
 ### CUDA GPU Mode
 
 ```bash
-# Requires CUDA build
+# Requires CUDA build on system with NVIDIA GPU
 ./build_cuda/sparse_ids data/pcap/test_traffic.pcap data/signatures/test_signatures.txt cuda
 ```
 
@@ -139,7 +148,7 @@ This creates:
 ./build/test_ids
 ```
 
-Expected output: **22 passed, 0 failed**
+Expected output: **23 passed, 0 failed**
 
 The test suite verifies:
 - N-gram feature extraction (empty, short, deterministic, unique+sorted)
@@ -150,6 +159,7 @@ The test suite verifies:
 - No-false-negatives property for all pattern lengths
 - Short signature end-to-end detection
 - Hash collision rate and effect
+- PCAP Hardening: graceful rejection of truncated, non-IPv4, and malformed packets
 - End-to-end sequential ground-truth validation
 - OpenMP produces identical alerts at 1, 2, and 4 threads
 
@@ -167,34 +177,54 @@ Then visualise:
 python3 scripts/plot_benchmarks.py benchmarks/benchmark_results.csv
 ```
 
-## Actual Benchmark Results (WSL2, Intel Core i7, 16 logical cores)
+## Actual Benchmark Results (WSL2, Intel Core i5-1240P, 16 logical cores)
 
 | Mode | Threads | Total (ms) | Pkts/sec | Speedup | Candidates | Alerts |
 |------|---------|-----------|---------|---------|-----------|--------|
-| Sequential | 1 | 916.7 | 10,908 | 1.00× | 751 | 355 |
-| OpenMP | 1 | 978.3 | 10,222 | 0.94× | 751 | 355 |
-| OpenMP | 2 | 550.2 | 18,176 | 1.67× | 751 | 355 |
-| OpenMP | 4 | 327.9 | 30,494 | 2.80× | 751 | 355 |
-| OpenMP | 16 | 179.1 | 55,837 | 5.12× | 751 | 355 |
+| Sequential | 1 | 943.2 | 10,602 | 1.00× | 751 | 355 |
+| OpenMP | 1 | 933.3 | 10,714 | 1.01× | 751 | 355 |
+| OpenMP | 2 | 569.2 | 17,568 | 1.66× | 751 | 355 |
+| OpenMP | 4 | 322.7 | 30,991 | 2.92× | 751 | 355 |
+| OpenMP | 8 | 242.8 | 41,180 | 3.88× | 751 | 355 |
+| OpenMP | 16 | 159.0 | 62,877 | 5.93× | 751 | 355 |
 
 **Matrix dimensions** (10,000 packets, 8 signatures, vocab=65536):
 - P: 10,000 × 65,536 — nnz = 7,691,118 — sparsity = 98.83%
 - S: 8 × 65,536 — nnz = 82 — sparsity = 99.98%
 - C: 10,000 × 8 — nnz = 9,254
 
-> CUDA benchmark: **not yet validated** — no local NVIDIA GPU. See `scripts/colab_cuda_run.py` for reproducible GPU execution on Google Colab.
+> CUDA benchmark: **architecturally complete, awaiting NVIDIA GPU hardware**. See `notebooks/gpu_sparse_ids_colab.ipynb` for automated GPU execution on Google Colab.
 
 ## Running CUDA on Google Colab
 
-```python
-# In a Colab cell (Runtime: GPU → T4):
-!pip install -q matplotlib
-!git clone https://github.com/YOUR_USERNAME/gpu_sparse_ids.git
-%cd gpu_sparse_ids
-!python3 scripts/colab_cuda_run.py
-```
+An automated interactive Jupyter Notebook is provided at:
+[`notebooks/gpu_sparse_ids_colab.ipynb`](notebooks/gpu_sparse_ids_colab.ipynb)
 
-Or follow `scripts/colab_cuda_run.py` manually.
+**Steps on Google Colab:**
+1. Open Google Colab and upload or open `notebooks/gpu_sparse_ids_colab.ipynb`.
+2. Select **Runtime** -> **Change runtime type** -> **T4 GPU**.
+3. Run all cells sequentially. The notebook automatically:
+   - Detects GPU model and CUDA capability (`sm_75`, `sm_80`, etc.).
+   - Installs dependencies (`libpcap-dev`, `cmake`).
+   - Configures CMake with `-DUSE_CUDA=ON` and compiles all binaries.
+   - Executes the 23-test suite.
+   - Runs comparative benchmarks (Sequential vs OpenMP vs CUDA cuSPARSE).
+   - Validates alert equivalence across CPU and GPU backends.
+   - Visualizes performance and exports all artifacts as a downloadable `.zip`.
+
+## Component Validation Status
+
+| Component | Status | Environment |
+|---|---|---|
+| PCAP Reader & Hardening | Tested & Verified | WSL2 Linux, libpcap |
+| Byte N-Gram Extraction | Tested & Verified | Local CPU (FNV-1a) |
+| Short-Signature Bypass | Tested & Verified | Zero false negatives |
+| CSR Construction & SpMM | Tested & Verified | Dense matrix equivalence |
+| Sequential CPU Backend | Tested & Verified | Ground truth validated |
+| OpenMP Parallel Backend | Tested & Verified | Scaled up to 16 threads, TSan clean |
+| Structured Alerts (CSV/JSON) | Tested & Verified | CLI verified |
+| CUDA / cuSPARSE SpGEMM | Implemented & Colab Ready | `notebooks/gpu_sparse_ids_colab.ipynb` |
+| NVIDIA Hardware Validation | Remote Ready | Requires NVIDIA GPU (e.g. Colab T4) |
 
 ## Signature File Format
 

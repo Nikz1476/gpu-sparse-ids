@@ -100,7 +100,7 @@ def main():
     n_sigs = int(to_f(r0.get('num_signatures', 0)))
     vocab  = int(to_f(r0.get('vocab_size', 0)))
     nnz_p  = int(to_f(r0.get('nnz_packets', 0)))
-    nnz_s  = int(to_f(r0.get('nnz_signatures', 0)))
+    nnz_s  = int(to_f(r0.get('nnz_sigs') if 'nnz_sigs' in r0 else r0.get('nnz_signatures', 0)))
     sparsity_p = 100.0 * (1.0 - nnz_p / (n_pkts * vocab)) if n_pkts * vocab > 0 else 0
     sparsity_s = 100.0 * (1.0 - nnz_s / (n_sigs * vocab)) if n_sigs * vocab > 0 else 0
     print(f"  P (packets×vocab):  {n_pkts} × {vocab}  nnz={nnz_p}  sparsity={sparsity_p:.2f}%")
