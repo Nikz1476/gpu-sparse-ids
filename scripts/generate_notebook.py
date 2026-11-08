@@ -76,7 +76,7 @@ nb = {
                 "# If the repo was already cloned or uploaded, use it; otherwise clone:\n",
                 "if not os.path.exists(REPO_DIR):\n",
                 "    # Replace with your repository URL if running standalone:\n",
-                "    REPO_URL = \"https://github.com/nikhil/gpu_sparse_ids.git\" # Update if hosted\n",
+                "    REPO_URL = \"https://github.com/Nikz1476/gpu-sparse-ids.git\"\n",
                 "    print(f\"Target repository directory: {REPO_DIR}\")\n",
                 "    if not os.path.exists(\"CMakeLists.txt\"):\n",
                 "        print(f\"Cloning {REPO_URL}...\")\n",
@@ -321,7 +321,9 @@ nb = {
     "nbformat_minor": 0
 }
 
-with open("/mnt/d/Nikhil/gitrepos/gpu_sparse_ids/notebooks/gpu_sparse_ids_colab.ipynb", "w", encoding="utf-8") as f:
+out_path = os.path.join(os.path.dirname(__file__), "..", "notebooks", "gpu_sparse_ids_colab.ipynb")
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
+with open(out_path, "w", encoding="utf-8") as f:
     json.dump(nb, f, indent=2)
 
 print("Notebook generated successfully at notebooks/gpu_sparse_ids_colab.ipynb")
