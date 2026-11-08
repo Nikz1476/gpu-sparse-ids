@@ -14,13 +14,38 @@ static double elapsed_ms(Clock::time_point s, Clock::time_point e) {
     return std::chrono::duration<double, std::milli>(e - s).count();
 }
 
+// Boyer-Moore-Horspool exact byte substring search (OpenMP thread-safe)
 static bool contains_pattern_omp(const std::vector<uint8_t>& haystack,
                                  const std::vector<uint8_t>& needle) {
     if (needle.empty()) return true;
     if (haystack.size() < needle.size()) return false;
-    size_t n = haystack.size(), m = needle.size();
-    for (size_t i = 0; i <= n - m; ++i)
-        if (memcmp(haystack.data() + i, needle.data(), m) == 0) return true;
+
+    size_t n = haystack.size();
+    size_t m = needle.size();
+
+    if (m == 1) {
+        return std::memchr(haystack.data(), needle[0], n) != nullptr;
+    }
+
+    size_t bad_char[256];
+    for (size_t i = 0; i < 256; ++i) {
+        bad_char[i] = m;
+    }
+    for (size_t i = 0; i < m - 1; ++i) {
+        bad_char[needle[i]] = m - 1 - i;
+    }
+
+    size_t shift = 0;
+    while (shift <= n - m) {
+        int j = static_cast<int>(m) - 1;
+        while (j >= 0 && needle[j] == haystack[shift + j]) {
+            --j;
+        }
+        if (j < 0) {
+            return true;
+        }
+        shift += bad_char[haystack[shift + m - 1]];
+    }
     return false;
 }
 
