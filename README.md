@@ -177,7 +177,23 @@ Then visualise:
 python3 scripts/plot_benchmarks.py benchmarks/benchmark_results.csv
 ```
 
-## Actual Benchmark Results (WSL2, Intel Core i5-1240P, 16 logical cores)
+## Actual Benchmark Results
+
+### 1. NVIDIA Tesla T4 GPU (Google Colab Environment)
+
+Measured on Google Colab (Intel Xeon @ 2.20GHz, 2 vCPUs, NVIDIA Tesla T4 16GB, 10,000 Packets, 8 Signatures):
+
+| Mode | FeatExt (ms) | CSR Build (ms) | SpMM (ms) | H2D (ms) | D2H (ms) | Total Compute (ms) | **Total Wallclock (ms)** | Throughput (pkts/s) | Speedup vs Seq |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sequential (1T)** | 1598.54 | 33.15 | 52.61 | 0.00 | 0.00 | 1685.47 | 1685.71 | 5,932 | 1.00× |
+| **OpenMP (1T)** | 1512.50 | 35.60 | 73.15 | 0.00 | 0.00 | 1622.37 | 1622.71 | 6,163 | 1.04× |
+| **OpenMP (2T)** | 1067.31 | 42.27 | 65.10 | 0.00 | 0.00 | 1175.59 | 1175.83 | 8,505 | 1.43× |
+| **OpenMP (4T)** | 1716.93 | 41.44 | 130.47 | 0.00 | 0.00 | 1890.64 | 1890.92 | 5,288 | 0.89× |
+| **CUDA (cuSPARSE + GPU FeatExt)** | **15.92** | **6.82** | **57.01** | **2.47** | **0.11** | **81.29** | **278.96** | **35,847** | **6.04×** |
+
+> **Key HPC Optimization:** Feature extraction time dropped from **1,598 ms to 15.92 ms** (a **100.4× speedup**) using an in-VRAM warp-parallel CUDA kernel with an 8 KB shared-memory bitset per block, eliminating Amdahl's Law bottleneck and enabling **6.04× end-to-end acceleration**.
+
+### 2. Multi-Core CPU (WSL2, Intel Core i5-1240P, 16 logical cores)
 
 | Mode | Threads | Total (ms) | Pkts/sec | Speedup | Candidates | Alerts |
 |------|---------|-----------|---------|---------|-----------|--------|
@@ -191,9 +207,7 @@ python3 scripts/plot_benchmarks.py benchmarks/benchmark_results.csv
 **Matrix dimensions** (10,000 packets, 8 signatures, vocab=65536):
 - P: 10,000 × 65,536 — nnz = 7,691,118 — sparsity = 98.83%
 - S: 8 × 65,536 — nnz = 82 — sparsity = 99.98%
-- C: 10,000 × 8 — nnz = 9,254
-
-> CUDA benchmark: **architecturally complete, awaiting NVIDIA GPU hardware**. See `notebooks/gpu_sparse_ids_colab.ipynb` for automated GPU execution on Google Colab.
+- C: 10,000 × 8 — nnz = 9,254 (filtered down to 751 candidates -> 355 verified alerts)
 
 ## Running CUDA on Google Colab
 
