@@ -1,0 +1,44 @@
+# ThreadSanitizer suppressions for GPU Sparse IDS
+#
+# BACKGROUND:
+# TSan cannot track synchronization performed by OpenMP's internal
+# pthread-based barriers. When a parallel region completes, all worker
+# threads reach an implicit barrier before control returns to the main
+# thread. TSan does not see this barrier, so it reports false races on
+# memory that was written inside a parallel region and read afterward
+# (or vice versa). These reports are benign — the accesses never overlap.
+#
+# Reference:
+#   https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68140
+#   https://github.com/google/sanitizers/issues/1Bug OpenMP+TSan interactions
+#
+# Race categories suppressed here (all false positives):
+#   1. Worker writes features[i]; main thread reads features[i] after barrier.
+#   2. Worker writes row_cols[i]/row_vals[i] in spmm; main reads after barrier.
+#   3. Worker reads packets[i]/signatures[i] (read-only shared data accessed
+#      concurrently by multiple threads — safe concurrent reads, not a race).
+#   4. Main thread calls extract_signature_features sequentially while a prior
+#      parallel region has already finished — TSan timestamps leak across
+#      parallel regions in the same gomp thread pool.
+
+# Suppress all races attributed to gomp's thread-pool management
+race:libgomp*
+
+# Suppress false races in our parallel extraction / SpMM loops
+race:ids::OpenMPEngine::extract_all_features_parallel*
+race:ids::OpenMPEngine::spmm_transpose_parallel*
+race:ids::OpenMPEngine::verify_candidates_parallel*
+
+# Suppress TSan false positives from destructors of objects whose memory
+# was last touched by an OpenMP thread (the objects are destroyed only
+# after the barrier, so there is no actual race)
+race:ids::Packet::~Packet*
+race:ids::Signature::~Signature*
+race:ids::Alert::~Alert*
+race:ids::Alert::Alert*
+
+# CSRBuilder::build_from_features is called sequentially after the
+# parallel region, but TSan sometimes attributes the access to a lingering
+# worker thread handle
+race:ids::CSRBuilder::build_from_features*
+

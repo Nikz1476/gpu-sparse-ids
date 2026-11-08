@@ -1,0 +1,18 @@
+# Expected matches for test_traffic.pcap with test_signatures.txt
+# Format: packet_id -> signature_id (signature_name)
+
+0 -> 1001 (SQL_INJECTION_OR)
+1 -> 1002 (XSS_SCRIPT_ALERT)
+2 -> 1003 (CMD_INJECTION_PASSWD)
+3 -> 1004 (DIR_TRAVERSAL_SHADOW)
+4 -> 1005 (NOP_SLED)
+5 -> 1006 (MALICIOUS_UA)
+6 -> 1007 (DNS_TUNNEL)
+7 -> 1008 (PHP_SHELL_EVAL)
+8 -> NONE (normal traffic)
+9 -> NONE (empty payload)
+10 -> NONE (near-miss, ' OR 2=2-- not ' OR 1=1--)
+11 -> 1001 (SQL_INJECTION_OR) + 1002 (XSS_SCRIPT_ALERT)
+12 -> NONE (short payload)
+13 -> NONE (AAAA on wrong port 5353, sig requires port 53)
+14 -> 1008 (PHP_SHELL_EVAL) [repeated pattern, single alert]
