@@ -17,6 +17,7 @@
 #include <algorithm>
 
 using Clock = std::chrono::high_resolution_clock;
+using namespace ids;
 
 // RAII cleanup helper to prevent GPU memory leaks on error paths
 struct CudaCleanup {
@@ -221,7 +222,7 @@ __global__ void filter_candidates_gpu_kernel(
     const uint32_t* __restrict__ sig_num_features,
     int ngram_size,
     const int* __restrict__ sig_pattern_lens,
-    CandidatePair* __restrict__ out_candidates,
+    ids::CandidatePair* __restrict__ out_candidates,
     int* __restrict__ candidate_count,
     int max_candidates)
 {
