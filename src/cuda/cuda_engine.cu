@@ -212,6 +212,45 @@ __global__ void emit_packet_features_kernel(
     }
 }
 
+// Pass 3: In-Place GPU Candidate Filtering
+__global__ void filter_candidates_gpu_kernel(
+    const int* __restrict__ C_row_ptr,
+    const int* __restrict__ C_col_idx,
+    const float* __restrict__ C_values,
+    int num_rows,
+    const uint32_t* __restrict__ sig_num_features,
+    int ngram_size,
+    const int* __restrict__ sig_pattern_lens,
+    CandidatePair* __restrict__ out_candidates,
+    int* __restrict__ candidate_count,
+    int max_candidates)
+{
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= num_rows) return;
+
+    int start = C_row_ptr[row];
+    int end = C_row_ptr[row + 1];
+
+    for (int idx = start; idx < end; ++idx) {
+        int sig_idx = C_col_idx[idx];
+        float score = C_values[idx];
+
+        uint32_t required = sig_num_features[sig_idx];
+        int pat_len = sig_pattern_lens[sig_idx];
+
+        if (required == 0 || pat_len < ngram_size) continue;
+
+        if (static_cast<uint32_t>(score + 0.5f) >= required) {
+            int pos = atomicAdd(candidate_count, 1);
+            if (pos < max_candidates) {
+                out_candidates[pos].packet_idx = row;
+                out_candidates[pos].signature_idx = sig_idx;
+                out_candidates[pos].score = score;
+            }
+        }
+    }
+}
+
 namespace ids {
 
 bool CUDAEngine::is_available() {
@@ -712,31 +751,76 @@ std::vector<Alert> CUDAEngine::run_gpu(
     auto t_comp_end = Clock::now();
     timing.sparse_compute_ms = std::chrono::duration<double, std::milli>(t_comp_end - t_comp_start).count();
 
-    // 6. Device to Host transfer of Matrix C
-    auto t_d2h_start = Clock::now();
-    CSRMatrix C;
-    C.num_rows = M;
-    C.num_cols = N;
-    C.nnz = static_cast<int>(C_nnz);
-    C.row_ptr.resize(M + 1);
-    C.col_idx.resize(C_nnz);
-    C.values.resize(C_nnz);
+    // 6. In-Place GPU Candidate Filtering
+    auto t_filt_start = Clock::now();
 
-    CUDA_CHECK(cudaMemcpy(C.row_ptr.data(), d_C_row_ptr, (M + 1) * sizeof(int), cudaMemcpyDeviceToHost), cleanup);
-    if (C_nnz > 0) {
-        CUDA_CHECK(cudaMemcpy(C.col_idx.data(), d_C_col_idx, C_nnz * sizeof(int), cudaMemcpyDeviceToHost), cleanup);
-        CUDA_CHECK(cudaMemcpy(C.values.data(), d_C_values, C_nnz * sizeof(float), cudaMemcpyDeviceToHost), cleanup);
+    // Prepare signature feature counts and pattern lengths on device (small: few bytes)
+    std::vector<uint32_t> h_sig_num_features(N);
+    std::vector<int> h_sig_pattern_lens(N);
+    for (int j = 0; j < N; ++j) {
+        h_sig_num_features[j] = signatures[j].num_features;
+        h_sig_pattern_lens[j] = static_cast<int>(signatures[j].pattern.size());
     }
-    auto t_d2h_end = Clock::now();
-    timing.device_to_host_ms = std::chrono::duration<double, std::milli>(t_d2h_end - t_d2h_start).count();
 
-    CSRBuilder::print_info(C, "C (scores)");
+    uint32_t* d_sig_num_features = nullptr;
+    int* d_sig_pattern_lens = nullptr;
+    CUDA_CHECK(safe_cudaMalloc((void**)&d_sig_num_features, N * sizeof(uint32_t)), cleanup);
+    cleanup.track(d_sig_num_features);
+    CUDA_CHECK(safe_cudaMalloc((void**)&d_sig_pattern_lens, N * sizeof(int)), cleanup);
+    cleanup.track(d_sig_pattern_lens);
 
-    // 7. Candidate generation and verification
-    auto candidates = CPUEngine::generate_candidates(C, signatures, extractor,
-                                                     static_cast<int>(packets.size()));
+    CUDA_CHECK(safe_cudaMemcpy(d_sig_num_features, h_sig_num_features.data(), N * sizeof(uint32_t), cudaMemcpyHostToDevice), cleanup);
+    CUDA_CHECK(safe_cudaMemcpy(d_sig_pattern_lens, h_sig_pattern_lens.data(), N * sizeof(int), cudaMemcpyHostToDevice), cleanup);
+
+    int max_candidates = std::max(static_cast<int>(C_nnz), 65536);
+    CandidatePair* d_candidates = nullptr;
+    int* d_candidate_count = nullptr;
+    CUDA_CHECK(safe_cudaMalloc((void**)&d_candidates, max_candidates * sizeof(CandidatePair)), cleanup);
+    cleanup.track(d_candidates);
+    CUDA_CHECK(safe_cudaMalloc((void**)&d_candidate_count, sizeof(int)), cleanup);
+    cleanup.track(d_candidate_count);
+    CUDA_CHECK(cudaMemset(d_candidate_count, 0, sizeof(int)), cleanup);
+
+    int block_size = 256;
+    int grid_size = (M + block_size - 1) / block_size;
+    if (grid_size > 0 && C_nnz > 0) {
+        filter_candidates_gpu_kernel<<<grid_size, block_size>>>(
+            d_C_row_ptr, d_C_col_idx, d_C_values, M,
+            d_sig_num_features, extractor.ngram_size(), d_sig_pattern_lens,
+            d_candidates, d_candidate_count, max_candidates);
+        CUDA_CHECK(cudaGetLastError(), cleanup);
+    }
+    CUDA_CHECK(cudaDeviceSynchronize(), cleanup);
+
+    // 7. Transfer ONLY candidate pairs to host (compact O(candidates) transfer)
+    int h_candidate_count = 0;
+    CUDA_CHECK(cudaMemcpy(&h_candidate_count, d_candidate_count, sizeof(int), cudaMemcpyDeviceToHost), cleanup);
+    h_candidate_count = std::min(h_candidate_count, max_candidates);
+
+    std::vector<CandidatePair> candidates(h_candidate_count);
+    if (h_candidate_count > 0) {
+        CUDA_CHECK(cudaMemcpy(candidates.data(), d_candidates, h_candidate_count * sizeof(CandidatePair), cudaMemcpyDeviceToHost), cleanup);
+    }
+    auto t_filt_end = Clock::now();
+    timing.device_to_host_ms = std::chrono::duration<double, std::milli>(t_filt_end - t_filt_start).count();
+
+    // Short-signature bypass on host (guarantees zero false negatives)
+    for (int j = 0; j < static_cast<int>(signatures.size()); ++j) {
+        const auto& sig = signatures[j];
+        if (sig.pattern.empty()) continue;
+        if (static_cast<int>(sig.pattern.size()) >= extractor.ngram_size()) continue;
+
+        for (int i = 0; i < M; ++i) {
+            CandidatePair cp;
+            cp.packet_idx = i;
+            cp.signature_idx = j;
+            cp.score = 0.0f;
+            candidates.push_back(cp);
+        }
+    }
+
     timing.num_candidates = static_cast<int>(candidates.size());
-    std::cout << "Candidates: " << candidates.size() << std::endl;
+    std::cout << "Candidates: " << candidates.size() << " (C nnz: " << C_nnz << ")" << std::endl;
 
     auto t5 = Clock::now();
     auto alerts = CPUEngine::verify_candidates(candidates, packets, signatures);
