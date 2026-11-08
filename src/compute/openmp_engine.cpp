@@ -7,6 +7,10 @@
 #include <cstring>
 #include <omp.h>
 
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
+
 namespace ids {
 
 using Clock = std::chrono::high_resolution_clock;
@@ -14,39 +18,71 @@ static double elapsed_ms(Clock::time_point s, Clock::time_point e) {
     return std::chrono::duration<double, std::milli>(e - s).count();
 }
 
-// Boyer-Moore-Horspool exact byte substring search (OpenMP thread-safe)
+// ──────────────────────────────────────────────────────────────────────
+// SIMD-Vectorized Scanning (AVX2) — OpenMP thread-safe variant
+//
+// Identical algorithm to cpu_engine.cpp (see comments there).
+// Each OpenMP thread calls this independently — no shared mutable state.
+// ──────────────────────────────────────────────────────────────────────
 static bool contains_pattern_omp(const std::vector<uint8_t>& haystack,
                                  const std::vector<uint8_t>& needle) {
     if (needle.empty()) return true;
     if (haystack.size() < needle.size()) return false;
 
-    size_t n = haystack.size();
-    size_t m = needle.size();
+    const size_t n = haystack.size();
+    const size_t m = needle.size();
+    const uint8_t* hay = haystack.data();
+    const uint8_t* ndl = needle.data();
 
     if (m == 1) {
-        return std::memchr(haystack.data(), needle[0], n) != nullptr;
+        return std::memchr(hay, ndl[0], n) != nullptr;
     }
 
-    size_t bad_char[256];
-    for (size_t i = 0; i < 256; ++i) {
-        bad_char[i] = m;
-    }
-    for (size_t i = 0; i < m - 1; ++i) {
-        bad_char[needle[i]] = m - 1 - i;
-    }
+    const size_t last_pos = n - m;
 
-    size_t shift = 0;
-    while (shift <= n - m) {
-        int j = static_cast<int>(m) - 1;
-        while (j >= 0 && needle[j] == haystack[shift + j]) {
-            --j;
+#ifdef __AVX2__
+    // ── AVX2 vectorized first-character probe ──────────────────────
+    const __m256i first_byte = _mm256_set1_epi8(static_cast<char>(ndl[0]));
+
+    size_t pos = 0;
+    while (pos + 31 <= last_pos) {
+        __m256i chunk = _mm256_loadu_si256(
+            reinterpret_cast<const __m256i*>(hay + pos));
+        __m256i cmp = _mm256_cmpeq_epi8(chunk, first_byte);
+        uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(cmp));
+
+        while (mask != 0) {
+            int bit = __builtin_ctz(mask);
+            size_t candidate = pos + static_cast<size_t>(bit);
+            if (candidate <= last_pos) {
+                if (std::memcmp(hay + candidate + 1, ndl + 1, m - 1) == 0) {
+                    return true;
+                }
+            }
+            mask &= mask - 1;
         }
-        if (j < 0) {
+        pos += 32;
+    }
+
+    // Scalar tail
+    for (size_t i = pos; i <= last_pos; ++i) {
+        if (hay[i] == ndl[0] &&
+            std::memcmp(hay + i + 1, ndl + 1, m - 1) == 0) {
             return true;
         }
-        shift += bad_char[haystack[shift + m - 1]];
     }
     return false;
+
+#else
+    // Scalar fallback
+    for (size_t i = 0; i <= last_pos; ++i) {
+        if (hay[i] == ndl[0] &&
+            std::memcmp(hay + i + 1, ndl + 1, m - 1) == 0) {
+            return true;
+        }
+    }
+    return false;
+#endif
 }
 
 std::vector<std::vector<int>> OpenMPEngine::extract_all_features_parallel(

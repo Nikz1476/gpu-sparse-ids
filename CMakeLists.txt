@@ -5,6 +5,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ------- SIMD / AVX2 support -------
+# Enable AVX2 intrinsics for SIMD-vectorized pattern scanning.
+# The guard __AVX2__ in source code provides a scalar fallback
+# if the compiler/CPU does not support AVX2.
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+if(COMPILER_SUPPORTS_AVX2)
+    add_compile_options(-mavx2)
+    message(STATUS "AVX2 SIMD enabled (-mavx2)")
+else()
+    message(STATUS "AVX2 not supported — using scalar fallback")
+endif()
+
 # ------- Options -------
 option(USE_CUDA "Enable CUDA/cuSPARSE GPU backend" OFF)
 
