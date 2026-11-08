@@ -699,6 +699,99 @@ void test_pcap_hardening_and_malformed_packets() {
     PASS();
 }
 
+void test_pcap_ipv6_and_vlan() {
+    TEST("PCAP Ingestion: 802.1Q VLAN and IPv6 packet parsing");
+
+    std::string test_pcap = "/tmp/vlan_ipv6_test.pcap";
+    pcap_t* dead = pcap_open_dead(DLT_EN10MB, 65535);
+    if (!dead) {
+        FAIL("Could not open dead pcap handle");
+        return;
+    }
+
+    pcap_dumper_t* dumper = pcap_dump_open(dead, test_pcap.c_str());
+    if (!dumper) {
+        pcap_close(dead);
+        FAIL("Could not open pcap dump file");
+        return;
+    }
+
+    struct pcap_pkthdr h;
+    memset(&h, 0, sizeof(h));
+
+    // 1. Ethernet with 802.1Q VLAN tag (EtherType 0x8100, tag 4 bytes) + IPv4 UDP
+    // Ethernet: 12 bytes MACs + 0x8100 (2 bytes) + VLAN ID 100 (2 bytes) + 0x0800 IPv4 (2 bytes)
+    std::vector<uint8_t> vlan_pkt = {
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // dst MAC
+        0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, // src MAC
+        0x81, 0x00,                         // 802.1Q EtherType
+        0x00, 0x64,                         // VLAN ID 100
+        0x45, 0x00, 0x00, 0x24,             // IPv4, 36 bytes total
+        0x00, 0x01, 0x00, 0x00,
+        0x40, 17,   0x00, 0x00,             // UDP
+        192, 168, 1, 10,
+        192, 168, 1, 20,
+        0x04, 0xD2, 0x04, 0xD2,             // port 1234 -> 1234
+        0x00, 0x10, 0x00, 0x00,             // UDP len = 16 (8 hdr + 8 payload)
+        'V', 'L', 'A', 'N', 'T', 'E', 'S', 'T'
+    };
+    h.caplen = vlan_pkt.size();
+    h.len = vlan_pkt.size();
+    pcap_dump((u_char*)dumper, &h, vlan_pkt.data());
+
+    // 2. Ethernet with IPv6 TCP (EtherType 0x86DD)
+    std::vector<uint8_t> ipv6_pkt = {
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // dst MAC
+        0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, // src MAC
+        0x86, 0xDD,                         // IPv6 EtherType (or direct offset 14)
+        // IPv6 Header (40 bytes)
+        0x60, 0x00, 0x00, 0x00,             // Version 6
+        0x00, 28,                           // Payload len = 28 (20 TCP + 8 payload)
+        6,                                  // Next header = TCP (6)
+        64,                                 // Hop limit
+        // Source IPv6 (2001:db8::1)
+        0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        // Dst IPv6 (2001:db8::2)
+        0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+        // TCP Header (20 bytes)
+        0x1F, 0x90, 0x00, 80,               // sport 8080, dport 80
+        0x00, 0x00, 0x00, 0x01,             // seq
+        0x00, 0x00, 0x00, 0x00,             // ack
+        0x50, 0x18, 0xFF, 0xFF,             // offset 5 (20 bytes)
+        0x00, 0x00, 0x00, 0x00,
+        // Payload (8 bytes)
+        'I', 'P', 'V', '6', 'T', 'E', 'S', 'T'
+    };
+    h.caplen = ipv6_pkt.size();
+    h.len = ipv6_pkt.size();
+    pcap_dump((u_char*)dumper, &h, ipv6_pkt.data());
+
+    pcap_dump_close(dumper);
+    pcap_close(dead);
+
+    auto pkts = PcapReader::read_pcap(test_pcap);
+    if (pkts.size() != 2) {
+        FAIL("Expected 2 packets (1 VLAN, 1 IPv6), got " << pkts.size());
+        return;
+    }
+
+    std::string vlan_pay(pkts[0].payload.begin(), pkts[0].payload.end());
+    std::string ipv6_pay(pkts[1].payload.begin(), pkts[1].payload.end());
+
+    if (vlan_pay != "VLANTEST") {
+        FAIL("VLAN payload mismatch: got " << vlan_pay);
+        return;
+    }
+    if (ipv6_pay != "IPV6TEST" || pkts[1].protocol != 6 || pkts[1].dst_port != 80) {
+        FAIL("IPv6 payload/metadata mismatch: got " << ipv6_pay);
+        return;
+    }
+
+    PASS();
+}
+
 // ============================================================
 // Main
 // ============================================================
@@ -740,6 +833,7 @@ int main() {
 
     // Hardened ingestion tests
     test_pcap_hardening_and_malformed_packets();
+    test_pcap_ipv6_and_vlan();
 
     // Integration tests
     test_e2e_sequential();

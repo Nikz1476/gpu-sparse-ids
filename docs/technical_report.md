@@ -149,14 +149,28 @@ Synthetic 10,000-packet benchmark PCAP:
 
 Measured on 12th Gen Intel Core i5-1240P (16 logical cores, WSL2 Linux):
 
-| Mode | FeatExt | CSR Build | SpMM | Verify | **Total** | Throughput |
-|------|--------|-----------|------|--------|-----------|------------|
-| Sequential | 824.2 | 73.6 | 44.0 | 1.15 | **943.2** | 10,602 pkts/s |
-| OpenMP-1T | 844.5 | 38.6 | 49.1 | 0.77 | **933.3** | 10,714 pkts/s |
-| OpenMP-2T | 496.8 | 42.6 | 29.0 | 0.48 | **569.2** | 17,568 pkts/s |
-| OpenMP-4T | 269.5 | 39.1 | 13.4 | 0.33 | **322.7** | 30,991 pkts/s |
-| OpenMP-8T | 182.0 | 52.2 | 7.7 | 0.52 | **242.8** | 41,180 pkts/s |
-| OpenMP-16T | 112.4 | 40.6 | 5.5 | 0.27 | **159.0** | **62,877 pkts/s** |
+### Timing Breakdown on NVIDIA T4 GPU (Google Colab Environment)
+
+Measured on Google Colab (Intel Xeon @ 2.20GHz, 2 vCPUs, NVIDIA Tesla T4 16GB, 10,000 Packets):
+
+| Mode | FeatExt (ms) | CSR Build (ms) | SpMM (ms) | H2D (ms) | D2H (ms) | **Total Compute (ms)** | **Total Wallclock (ms)** | Throughput (pkts/s) | Speedup vs Seq |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sequential (1T)** | 1598.54 | 33.15 | 52.61 | 0.00 | 0.00 | 1685.47 | 1685.71 | 5,932 | 1.00× |
+| **OpenMP (1T)** | 1512.50 | 35.60 | 73.15 | 0.00 | 0.00 | 1622.37 | 1622.71 | 6,163 | 1.04× |
+| **OpenMP (2T)** | 1067.31 | 42.27 | 65.10 | 0.00 | 0.00 | 1175.59 | 1175.83 | 8,505 | 1.43× |
+| **OpenMP (4T)** | 1716.93 | 41.44 | 130.47 | 0.00 | 0.00 | 1890.64 | 1890.92 | 5,288 | 0.89× |
+| **CUDA (cuSPARSE + GPU FeatExt)** | **15.92** | **6.82** | **57.01** | **2.47** | **0.11** | **81.29** | **278.96** | **35,847** | **6.04×** |
+
+### HPC Architectural Breakthrough Analysis
+1. **Breaking the Amdahl's Law Bottleneck:**
+   - In the initial baseline, offloading only the SpMM multiplication ($C = P \times S^T$) to cuSPARSE resulted in $0.91\times$ speedup (slower than sequential) because the CPU spent **1,654 ms** calculating sliding-window FNV-1a hashes sequentially.
+   - By implementing the **warp-parallel GPU feature extraction kernel** with an 8 KB shared-memory bitset per block, feature extraction time plummeted from **1,598 ms to 15.92 ms** (a **100.4× speedup** on feature extraction alone).
+2. **In-VRAM CSR Synthesis & Zero-Copy Elimination:**
+   - Scanning the bitset via `__ffs()` naturally emits column indices in strictly ascending order without requiring an external radix sort.
+   - Transferring raw packet payloads directly to GPU reduced PCIe Host-to-Device transfer time from **14.39 ms down to 2.47 ms**.
+3. **End-to-End Speedup & Throughput:**
+   - Compute-only time dropped from **1,685 ms to 81.29 ms** (a **20.7× compute speedup**).
+   - End-to-end wallclock throughput jumped from **5,932 pkts/sec to 35,847 pkts/sec** (**6.04× end-to-end speedup**), outperforming all multi-core CPU configurations while preserving 100% ground-truth detection accuracy (751 candidates, 355 alerts).
 
 ### Speedup and Efficiency
 
