@@ -164,13 +164,15 @@ Measured on Google Colab (Intel Xeon @ 2.20GHz, 2 vCPUs, NVIDIA Tesla T4 16GB, 1
 ### HPC Architectural Breakthrough Analysis
 1. **Breaking the Amdahl's Law Bottleneck:**
    - In the initial baseline, offloading only the SpMM multiplication ($C = P \times S^T$) to cuSPARSE resulted in $0.91\times$ speedup (slower than sequential) because the CPU spent **1,654 ms** calculating sliding-window FNV-1a hashes sequentially.
-   - By implementing the **warp-parallel GPU feature extraction kernel** with an 8 KB shared-memory bitset per block, feature extraction time plummeted from **1,598 ms to 15.92 ms** (a **100.4× speedup** on feature extraction alone).
+   - By implementing the **warp-parallel GPU feature extraction kernel** with an 8 KB shared-memory bitset per block, feature extraction time plummeted from **1,834.5 ms to 14.87 ms** (a **123.4× speedup** on feature extraction alone).
 2. **In-VRAM CSR Synthesis & Zero-Copy Elimination:**
    - Scanning the bitset via `__ffs()` naturally emits column indices in strictly ascending order without requiring an external radix sort.
-   - Transferring raw packet payloads directly to GPU reduced PCIe Host-to-Device transfer time from **14.39 ms down to 2.47 ms**.
-3. **End-to-End Speedup & Throughput:**
-   - Compute-only time dropped from **1,685 ms to 81.29 ms** (a **20.7× compute speedup**).
-   - End-to-end wallclock throughput jumped from **5,932 pkts/sec to 35,847 pkts/sec** (**6.04× end-to-end speedup**), outperforming all multi-core CPU configurations while preserving 100% ground-truth detection accuracy (751 candidates, 355 alerts).
+   - Transferring raw packet payloads directly to GPU reduced PCIe Host-to-Device transfer time from **14.39 ms down to 2.39 ms**.
+3. **AVX2 SIMD Vectorized Verification:**
+   - Replacing byte-by-byte substring scanning with 256-bit SIMD first-character probes (`_mm256_cmpeq_epi8`) checks 32 payload bytes per clock cycle, accelerating exact verification to **0.399 ms** (~0.53 μs per candidate).
+4. **End-to-End Speedup & Throughput:**
+   - Compute-only time dropped from **2,033.37 ms to 64.80 ms** (a **31.4× compute speedup**).
+   - End-to-end wallclock throughput jumped from **4,917 pkts/sec to 42,075 pkts/sec** (**8.56× end-to-end speedup**), outperforming all multi-core CPU configurations while preserving 100% ground-truth detection accuracy (751 candidates, 355 alerts).
 
 ### Speedup and Efficiency
 
