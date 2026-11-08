@@ -153,13 +153,13 @@ Measured on 12th Gen Intel Core i5-1240P (16 logical cores, WSL2 Linux):
 
 Measured on Google Colab (Intel Xeon @ 2.20GHz, 2 vCPUs, NVIDIA Tesla T4 16GB, 10,000 Packets):
 
-| Mode | FeatExt (ms) | CSR Build (ms) | SpMM (ms) | H2D (ms) | D2H (ms) | **Total Compute (ms)** | **Total Wallclock (ms)** | Throughput (pkts/s) | Speedup vs Seq |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Sequential (1T)** | 1598.54 | 33.15 | 52.61 | 0.00 | 0.00 | 1685.47 | 1685.71 | 5,932 | 1.00× |
-| **OpenMP (1T)** | 1512.50 | 35.60 | 73.15 | 0.00 | 0.00 | 1622.37 | 1622.71 | 6,163 | 1.04× |
-| **OpenMP (2T)** | 1067.31 | 42.27 | 65.10 | 0.00 | 0.00 | 1175.59 | 1175.83 | 8,505 | 1.43× |
-| **OpenMP (4T)** | 1716.93 | 41.44 | 130.47 | 0.00 | 0.00 | 1890.64 | 1890.92 | 5,288 | 0.89× |
-| **CUDA (cuSPARSE + GPU FeatExt)** | **15.92** | **6.82** | **57.01** | **2.47** | **0.11** | **81.29** | **278.96** | **35,847** | **6.04×** |
+| Mode | FeatExt (ms) | CSR Build (ms) | SpMM (ms) | Verification (ms) | H2D (ms) | D2H (ms) | **Total Compute (ms)** | **Total Wallclock (ms)** | Throughput (pkts/s) | Speedup vs Seq |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sequential (1T)** | 1834.52 | 40.16 | 158.16 | 0.54 | 0.00 | 0.00 | 2033.37 | 2033.62 | 4,917 | 1.00× |
+| **OpenMP (1T)** | 2090.49 | 33.07 | 71.13 | 0.50 | 0.00 | 0.00 | 2195.20 | 2195.49 | 4,555 | 0.93× |
+| **OpenMP (2T)** | 1094.75 | 37.07 | 73.35 | 0.39 | 0.00 | 0.00 | 1205.55 | 1205.78 | 8,293 | 1.69× |
+| **OpenMP (4T)** | 1121.78 | 32.72 | 64.18 | 0.42 | 0.00 | 0.00 | 1219.10 | 1219.38 | 8,201 | 1.67× |
+| **CUDA (cuSPARSE + GPU FeatExt)** | **14.87** | **6.37** | **43.17** | **0.40** | **2.39** | **0.09** | **64.80** | **237.67** | **42,075** | **8.56×** |
 
 ### HPC Architectural Breakthrough Analysis
 1. **Breaking the Amdahl's Law Bottleneck:**

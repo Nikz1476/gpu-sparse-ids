@@ -148,16 +148,21 @@ This creates:
 ./build/test_ids
 ```
 
-Expected output: **23 passed, 0 failed**
+Expected output: **24 passed, 0 failed**
 
 The test suite verifies:
 - N-gram feature extraction (empty, short, deterministic, unique+sorted)
 - CSR structure invariants (monotonicity, row_ptr consistency)
 - SpMM correctness (known products, sparse vs dense reference on random matrices)
 - Candidate generation (threshold filtering, short-signature bypass)
-- Exact verification (match, non-match, protocol filter, port filter)
+- Exact verification (match, non-match, protocol filter, port filter, AVX2 SIMD scanning)
 - No-false-negatives property for all pattern lengths
 - Short signature end-to-end detection
+- IPv6 and 802.1Q VLAN packet parsing and filtering
+- Hash collision rate and effect
+- PCAP Hardening: graceful rejection of truncated, malformed packets
+- End-to-end sequential ground-truth validation
+- OpenMP produces identical alerts at 1, 2, and 4 threads
 - Hash collision rate and effect
 - PCAP Hardening: graceful rejection of truncated, non-IPv4, and malformed packets
 - End-to-end sequential ground-truth validation
