@@ -1,5 +1,9 @@
 # GPU-Accelerated Sparse Linear Algebra Network Intrusion Detection System
 
+> 🎓 **Viva & Project Discussion Guide:** For an exhaustive, professor-grade defense manual covering mathematical proofs, module deep dives, GPU kernel internals, SIMD vectorization, and model answers to examiners' questions, read:  
+> 📖 **[docs/VIVA_DEFENSE_GUIDE.md](docs/VIVA_DEFENSE_GUIDE.md)**
+
+
 A research-oriented, HPC-focused IDS that uses **sparse matrix multiplication** as its central computational mechanism to accelerate signature-based network intrusion detection.
 
 ## Mathematical Formulation
