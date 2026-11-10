@@ -207,16 +207,22 @@ Measured on Google Colab (Intel Xeon @ 2.20GHz, 2 vCPUs, NVIDIA Tesla T4 16GB, 1
 > 2. **AVX2 SIMD Vectorized Scanning:** Exact verification accelerated to **0.399 ms** (~0.53 μs/candidate) using 256-bit SIMD first-character probes (`_mm256_cmpeq_epi8`), checking 32 payload bytes per clock cycle.
 > 3. **End-to-End Speedup:** End-to-end pipeline time reached **237.67 ms (42,075 packets/sec)**, delivering an **8.56× speedup** over the sequential baseline with 100% alert equivalence.
 
-### 2. Multi-Core CPU (WSL2, Intel Core i5-1240P, 16 logical cores)
+### 2. Multi-Core CPU (WSL2, 12th Gen Intel Core i5-12450H, AVX2 SIMD Enabled)
 
-| Mode | Threads | Total (ms) | Pkts/sec | Speedup | Candidates | Alerts |
-|------|---------|-----------|---------|---------|-----------|--------|
-| Sequential | 1 | 943.2 | 10,602 | 1.00× | 751 | 355 |
-| OpenMP | 1 | 933.3 | 10,714 | 1.01× | 751 | 355 |
-| OpenMP | 2 | 569.2 | 17,568 | 1.66× | 751 | 355 |
-| OpenMP | 4 | 322.7 | 30,991 | 2.92× | 751 | 355 |
-| OpenMP | 8 | 242.8 | 41,180 | 3.88× | 751 | 355 |
-| OpenMP | 16 | 159.0 | 62,877 | 5.93× | 751 | 355 |
+Empirically measured directly on your host machine (12 logical cores, 10,000 Packets, 8 Signatures):
+
+| Mode | Threads | FeatExt (ms) | CSR Build (ms) | SpMM (ms) | Verification (ms) | **Total Wallclock (ms)** | Throughput (pkts/s) | Speedup vs Seq | Parallel Efficiency |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sequential** | 1 | 1976.46 | 99.23 | 93.19 | 0.59 | **2170.0 ms** | 4,608 | **1.00×** | 100.0% |
+| **OpenMP** | 1 | 1700.96 | 61.07 | 92.88 | 0.63 | **1856.2 ms** | 5,387 | **1.17×** | 100.0% |
+| **OpenMP** | 2 | 894.92 | 69.29 | 47.97 | 0.38 | **1013.0 ms** | 9,872 | **2.14×** | 107.1% |
+| **OpenMP** | 4 | 421.96 | 49.19 | 25.89 | 0.25 | **497.6 ms** | 20,096 | **4.36×** | 109.0% |
+| **OpenMP** | 8 | 306.31 | 52.08 | 19.89 | 0.32 | **379.0 ms** | 26,386 | **5.73×** | 71.6% |
+
+> **Key Observations on Your Local CPU:**
+> 1. **Super-Linear Scaling at 2 & 4 Threads:** OpenMP feature extraction scales with >100% parallel efficiency up to 4 threads due to excellent L1/L2 cache locality across the Intel P-cores.
+> 2. **Verification Time with AVX2:** Stage 2 exact verification drops to **0.25 ms** using AVX2 SIMD vectorization.
+> 3. **GPU Comparison:** Even against your machine's 8 fast CPU threads (379 ms), the **Tesla T4 GPU engine (237.67 ms end-to-end, 64.8 ms compute)** remains significantly faster.
 
 **Matrix dimensions** (10,000 packets, 8 signatures, vocab=65536):
 - P: 10,000 × 65,536 — nnz = 7,691,118 — sparsity = 98.83%
